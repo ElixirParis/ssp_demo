@@ -11,7 +11,8 @@ defmodule SSPDemo.Mixfile do
   end
 
   def application do
-    [applications: [:logger,:cowboy,:iex,:poison, :exos,:folsom,:folsomite]]
+    [applications: [:logger,:cowboy,:iex,:poison, :exos,:folsom,:folsomite],
+     mod: {SSPDemo.App,[]}]
   end
 
   defp deps do
