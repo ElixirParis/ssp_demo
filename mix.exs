@@ -11,12 +11,13 @@ defmodule SSPDemo.Mixfile do
   end
 
   def application do
-    [applications: [:logger,:cowboy,:iex,:poison, :exos,:folsom,:folsomite],
+    [applications: [:logger,:plug,:cowboy,:iex,:poison, :exos,:folsom,:folsomite],
      mod: {SSPDemo.App,[]}]
   end
 
   defp deps do
     [{:cowboy, "~> 1.0"},
+     {:plug, "~> 1.0"},
      {:exos, "~> 1.0.0"},
      {:poison, "~> 1.5.0"},
      {:folsom, github: "boundary/folsom"},
