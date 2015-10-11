@@ -3,10 +3,11 @@ defmodule SSPDemo.App do
   import Supervisor.Spec
 
   def start(_,_) do
+    IO.puts "start application"
     Supervisor.start_link([
       supervisor(SSPDemo.App.BidderCallerSup,[],[]),
       worker(SSPDemo.Reporter,[],[]),
-      Plug.Adapters.Cowboy.child_spec(:http,SSPDemo.HTTP,[],port: 7321)
+      Plug.Adapters.Cowboy.child_spec(:http,SSPDemo.HTTP,[],ip: {0,0,0,0,0,0,0,1}, port: 9888)
     ], strategy: :one_for_one)
   end
 
@@ -109,7 +110,7 @@ defmodule SSPDemo.CallerSup do
   def start_link, do: 
     Task.Supervisor.start_link(name: __MODULE__, restart: :transient)
   def request(bidder_id,bidrequest) do
-    Task.Supervisor.start_child(__MODULE__, fn ->
+    Task.Supervisor.async(__MODULE__, fn ->
       GenServer.call(bidder_id,bidrequest)
     end)
   end
@@ -118,7 +119,7 @@ end
 defmodule SSPDemo.Reporter do
   use GenServer
   def start_link, do:
-    GenServer.start_link(__MODULE__,[]) 
+    GenServer.start_link(__MODULE__,[], name: __MODULE__) 
 
   def handle_cast(_log,state) do
     ## TODO folsom put metric
@@ -135,8 +136,9 @@ defmodule SSPDemo do
       |> Enum.map(&SSPDemo.CallerSup.request(&1.name,request))
       |> Enum.map(&Task.yield(&1,100))
       |> Enum.filter(& !is_nil(&1))
+      |> Enum.map(fn {:ok,resp}->resp end)
       |> Enum.sort_by(& &1.bid)
-      |> List.first
+      |> List.last
     GenServer.cast SSPDemo.Reporter, response
     response
   end
@@ -151,7 +153,7 @@ defmodule SSPDemo.HTTP do
     # todo, get headers to fill user agent and language
     response = SSPDemo.auction(conn.remote_ip,"","fr",slot)
     conn |> put_resp_content_type("application/json")
-         |> send_resp(200, Poison.encode(response))
+         |> send_resp(200, Poison.encode!(response))
   end
 
   match _ do
