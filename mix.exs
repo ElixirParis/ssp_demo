@@ -20,7 +20,6 @@ defmodule SSPDemo.Mixfile do
      {:plug, "~> 1.0"},
      {:exos, "~> 1.0.0"},
      {:poison, "~> 1.5.0"},
-     {:folsom, github: "boundary/folsom"},
      {:folsomite, github: "campanja/folsomite"}]
   end
 end

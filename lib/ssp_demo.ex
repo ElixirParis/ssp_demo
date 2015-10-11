@@ -7,17 +7,16 @@ defmodule SSPDemo.App do
       supervisor(SSPDemo.App.BidderCallerSup,[],[]),
       worker(SSPDemo.Reporter,[],[]),
       Plug.Adapters.Cowboy.child_spec(:http,SSPDemo.HTTP,[],port: 7321)
-    ], strategy: :one_for_one])
+    ], strategy: :one_for_one)
   end
 
   defmodule BidderCallerSup do
     import Supervisor.Spec
     def start_link do
-      bidders = Application.get_env(:ssp_demo,:bidders)
       Supervisor.start_link([
         worker(SSPDemo.Config,[],[]),
         supervisor(SSPDemo.App.BidderSup,[],[]),
-        supervisor(SSPDemo.CallerSup)
+        supervisor(SSPDemo.CallerSup,[],[])
       ] , strategy: :one_for_one)
     end
   end
@@ -26,11 +25,9 @@ defmodule SSPDemo.App do
     import Supervisor.Spec
     def start_link do
       bidders = Application.get_env(:ssp_demo,:bidders)
-      Supervisor.start_link(
-        for %{name: name}=bidder<-bidders do
-          worker(SSPDemo.Throttler,bidder,name: name)
-        end
-      , strategy: :one_for_one)
+      Supervisor.start_link(for %{name: name}=bidder<-bidders do
+        worker(SSPDemo.Throttler,[bidder],id: name)
+      end, strategy: :one_for_one)
     end
   end
 end
@@ -53,10 +50,10 @@ defmodule SSPDemo.Throttler do
     GenServer.start_link(__MODULE__, bidder, name: bidder.name)
 
   def init(%{mod: mod,conf: conf,nb_per_ms: {m,n}, max_q: maxqlen}) do
-    %{pid: mod.start_link(conf), tr: TimeRing.new(m,n), 
-      maxqlen: maxqlen, qlen: 0, q: :queue.new}
+    {:ok,pid} = mod.start_link(conf)
+    {:ok,%{pid: pid, tr: TimeRing.new(m,n), maxqlen: maxqlen, qlen: 0, q: :queue.new}}
   end
-  def handle_call(req,reply_to,%{maxqlen: qlen, qlen: qlen}=state) do
+  def handle_call(_req,_reply_to,%{maxqlen: qlen, qlen: qlen}=state) do
     IO.puts "Bidder #{elem(Process.info(self,:registered_name),1)} overloaded, drop request"
     # TODO put dropped query into folsom
     {:noreply,state}
@@ -76,11 +73,11 @@ defmodule SSPDemo.Bidder do
   use Behaviour 
   defcallback start_link(conf::any)
   defcallback map_request(SSPDemo.BidRequest.t) :: any
-  defcallback use_bidder(SSPDemo.BidRequest.t) :: bool
+  defcallback use_bidder(SSPDemo.BidRequest.t) :: boolean
 
   defmacro __using__(_opts) do
     quote do
-      @behaviour Bidder
+      @behaviour SSPDemo.Bidder
       use GenServer
       def start_link(conf) do
         GenServer.start_link(__MODULE__,conf,[])
@@ -123,7 +120,7 @@ defmodule SSPDemo.Reporter do
   def start_link, do:
     GenServer.start_link(__MODULE__,[]) 
 
-  def handle_cast(log,state) do
+  def handle_cast(_log,state) do
     ## TODO folsom put metric
     {:noreply,state}
   end
