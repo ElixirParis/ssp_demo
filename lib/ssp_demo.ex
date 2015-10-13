@@ -79,8 +79,16 @@ end
 
 defmodule SSPDemo.Bidder do
   use Behaviour 
+  @doc """
+    Process started with `start_link` must be GenServer 
+    - accepting calls of type `map_request(BidRequest)`
+    - returning object which can be mapped with `map_response` to get a `BidResponse`
+
+    `use_bidder` return false if the bidder should not be used for a request
+  """
   defcallback start_link(conf::any)
   defcallback map_request(SSPDemo.BidRequest.t) :: any
+  defcallback map_response(any) :: SSPDemo.BidResponse.t
   defcallback use_bidder(SSPDemo.BidRequest.t) :: boolean
 
   defmacro __using__(_opts) do
@@ -91,9 +99,10 @@ defmodule SSPDemo.Bidder do
         GenServer.start_link(__MODULE__,conf,[])
       end
       def map_request(req), do: req
+      def map_response(res), do: res
       def use_bidder(req), do: true
 
-      defoverridable [start_link: 1, map_request: 1, use_bidder: 1]
+      defoverridable [start_link: 1, map_request: 1, map_response: 1, use_bidder: 1]
     end
   end
 end
@@ -118,9 +127,12 @@ end
 defmodule SSPDemo.CallerSup do
   def start_link, do: 
     Task.Supervisor.start_link(name: __MODULE__, restart: :transient)
-  def request(bidder_id,bidrequest) do
+  def request(bidrequest,bidder_id,bidder_mod) do
     Task.Supervisor.async(__MODULE__, fn ->
-      GenServer.call(bidder_id,bidrequest)
+      case GenServer.call(bidder_id,bidder_mod.map_request(bidrequest)) do
+        :dropped-> :dropped
+        res-> bidder_mod.map_response(res)
+      end
     end)
   end
 end
@@ -143,7 +155,7 @@ defmodule SSPDemo do
     request = bidrequest(ip,user_agent,language,slot_id,conf)
     response = Application.get_env(:ssp_demo,:bidders)
       |> Enum.filter(& &1.mod.use_bidder(request))
-      |> Enum.map(&SSPDemo.CallerSup.request(&1.name,request))
+      |> Enum.map(&SSPDemo.CallerSup.request(request,&1.name,&1.mod))
       |> Enum.map(&Task.yield(&1,1000))
       |> Enum.reject(fn nil->true # query time is too long
                         {:ok,:dropped}->true # throttler queue is overloaded
