@@ -1,3 +1,12 @@
+defmodule Mix.Tasks.Compile.Openbidder do
+  @shortdoc "Create open_bidder Jar"
+  def run(_) do
+    if not File.exists?("priv/open_bidder/target/open-bidder-0.0.1-standalone.jar") do
+      System.cmd "lein", ["uberjar"], cd: "priv/open_bidder", into: IO.stream(:stdio,:line)
+    end
+  end
+end
+
 defmodule SSPDemo.Mixfile do
   use Mix.Project
 
@@ -7,6 +16,7 @@ defmodule SSPDemo.Mixfile do
      elixir: "~> 1.1",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
+     compilers: [:openbidder] ++ Mix.compilers,
      deps: deps]
   end
 
