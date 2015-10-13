@@ -12,13 +12,15 @@ http://127.0.0.1:10000/graph?d0=riemann&d1=riemann&d2=riemann&d3=riemann&d4=riem
   - throttler
   - query management
   - the bidder protocol and default impl thanks to Elixir
+  - erlastic power : include java / python / node / etc. libraries
+  - elixir power: dynamic code and mix task
 
 - show fluent query rate management and memory control with
   throttling
-- show state related bug in AdExchange1 and config recovery with
-  min_cpm: 10
-- show random bug in DSP2 and resilience thanks to task transient
-  supervision
+- show external port memory leak -> OM Killer -> recovery
+- remove the Java open Bidder to simplify demo explanations
+- show state related bug in AdExchange1 and config recovery with min_cpm: 10
+- show random bug in DSP2 and resilience thanks to task transient supervision
 - show hot reloading removing the bug
 
 Enjoy !
