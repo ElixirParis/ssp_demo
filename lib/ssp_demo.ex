@@ -17,7 +17,7 @@ defmodule SSPDemo.App do
         worker(SSPDemo.Config,[],[]),
         supervisor(SSPDemo.App.BidderSup,[],[]),
         supervisor(SSPDemo.CallerSup,[],[])
-      ] , strategy: :one_for_one)
+      ] , strategy: :one_for_all)
     end
   end
 
@@ -27,7 +27,7 @@ defmodule SSPDemo.App do
       bidders = Application.get_env(:ssp_demo,:bidders)
       Supervisor.start_link(for %{name: name}=bidder<-bidders do
         worker(SSPDemo.Throttler,[bidder],id: name)
-      end, strategy: :one_for_one)
+      end, strategy: :one_for_one, max_restarts: 2,max_seconds: 2)
     end
   end
 end
@@ -120,21 +120,8 @@ end
 defmodule SSPDemo.Config do
   def start_link, do:
     Agent.start_link(fn -> Application.get_env(:ssp_demo,:bid_config) end, name: __MODULE__)
-  def update(conf), do: Agent.update(__MODULE__, fn _->conf end)
+  def update(fields), do: Agent.update(__MODULE__, fn conf->Enum.into(fields,conf) end)
   def get, do: Agent.get(__MODULE__, &(&1))
-end
-
-defmodule SSPDemo.CallerSup do
-  def start_link, do: 
-    Task.Supervisor.start_link(name: __MODULE__, restart: :transient)
-  def request(bidrequest,bidder_id,bidder_mod) do
-    Task.Supervisor.async(__MODULE__, fn ->
-      case GenServer.call(bidder_id,bidder_mod.map_request(bidrequest)) do
-        :dropped-> :dropped
-        res-> bidder_mod.map_response(res)
-      end
-    end)
-  end
 end
 
 defmodule SSPDemo.Reporter do
@@ -148,23 +135,43 @@ defmodule SSPDemo.Reporter do
   end
 end
 
+defmodule SSPDemo.CallerSup do
+  def start_link, do: 
+    Task.Supervisor.start_link(name: __MODULE__,
+                               restart: :transient,
+                               max_restarts: 10_000,max_seconds: 5)
+  def requests(request,bidders,min_bid) do
+    parent = self; ref = make_ref
+    pids = for %{mod: mod,name: name}<-bidders, mod.use_bidder(request) do
+      {:ok,pid} = Task.Supervisor.start_child(__MODULE__, fn->
+        case GenServer.call(name,mod.map_request(request)) do
+          :dropped-> send(parent,{ref,:dropped})
+          res-> send(parent,{ref,mod.map_response(res)})
+        end
+      end)
+      pid
+    end
+    Process.send_after(self,{ref,:timeout},1300)
+    res = Enum.reduce_while(pids,[],fn _,acc->
+      receive do
+        {^ref,%SSPDemo.BidResponse{bid: bid}=res} when bid >= min_bid->
+          {:cont,[res|acc]}
+        {^ref,:timeout}->{:halt,acc}
+        {^ref,_}-> {:cont,acc}
+      end
+    end)
+    Enum.map(pids,&Task.Supervisor.terminate_child(__MODULE__,&1))
+    res
+  end
+end
+
 defmodule SSPDemo do
   def auction(ip,user_agent,language,slot_id) do
     conf = SSPDemo.Config.get
-    min_cpm = conf.min_cpm
     request = bidrequest(ip,user_agent,language,slot_id,conf)
-    response = Application.get_env(:ssp_demo,:bidders)
-      |> Enum.filter(& &1.mod.use_bidder(request))
-      |> Enum.map(&SSPDemo.CallerSup.request(request,&1.name,&1.mod))
-      |> Enum.map(&Task.yield(&1,1000))
-      |> Enum.reject(fn nil->true # query time is too long
-                        {:ok,:dropped}->true # throttler queue is overloaded
-                        {:ok,%{bid: bid}} when bid<min_cpm->true # bid is too low
-                        _->false 
-                      end)
-      |> Enum.map(fn {:ok,resp}->resp end)
-      |> Enum.sort_by(& &1.bid)
-      |> List.last
+    response = SSPDemo.CallerSup.requests(request,Application.get_env(:ssp_demo,:bidders), conf.min_cpm)
+               |> Enum.sort_by(& &1.bid)
+               |> List.last
     GenServer.cast SSPDemo.Reporter, response
     response
   end

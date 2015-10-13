@@ -1,6 +1,7 @@
 defmodule AdExchange1 do
   use SSPDemo.Bidder
-  def handle_call(_req,_,state) do
+  def handle_call(req,_,state) do
+    true = req.min_cpm != 10
     {:reply,%SSPDemo.BidResponse{bid: 3},state}
   end
 end
@@ -8,7 +9,9 @@ end
 defmodule DSP2 do
   use SSPDemo.Bidder
   def handle_call(_req,_,state) do
-    {:reply,%SSPDemo.BidResponse{bid: 2},state}
+    #:random.seed :erlang.timestamp
+    #false = Enum.random(1..30) == 1
+    {:reply,%SSPDemo.BidResponse{bid: 10},state}
   end
 end
 
