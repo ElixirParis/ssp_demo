@@ -1,9 +1,9 @@
 use Mix.Config
 
 config :ssp_demo, bidders: [
-  %{mod: AdExchange1, name: AdExchange1, conf: %{}, nb_per_ms: {5,1000}, max_q: 1000},
-  %{mod: DSP1, name: DSP1, conf: %{}, nb_per_ms: {3,1000}, max_q: 1000},
-  %{mod: DSP2, name: DSP2, conf: %{}, nb_per_ms: {7,1000}, max_q: 1000}
+  %{mod: AdExchange1, name: AdExchange1, conf: %{}, nb_per_ms: {5,1000}, max_q: 10},
+  %{mod: DSP1, name: DSP1, conf: %{}, nb_per_ms: {6,1000}, max_q: 10},
+  %{mod: DSP2, name: DSP2, conf: %{}, nb_per_ms: {7,1000}, max_q: 10}
 ]
 
 config :ssp_demo, bid_config: %{

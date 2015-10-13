@@ -58,7 +58,12 @@ defmodule SSPDemo.Throttler do
   end
   def handle_call(req,reply_to,%{q: q,tr: timering, qlen: qlen}=state) do
     {wait,timering} = TimeRing.next(timering)
-    {:noreply,%{state| qlen: qlen+1, q: :queue.in({req,reply_to},q), tr: timering},wait}
+    if wait > 1000 do
+      {:reply,:dropped,state}
+    else
+      Process.send_after(self,:timeout,wait)
+      {:noreply,%{state| qlen: qlen+1, q: :queue.in({req,reply_to},q), tr: timering}}
+    end
   end
   def handle_info(:timeout,%{pid: pid, q: q, qlen: qlen}=state) do
     {:registered_name,bidder} = Process.info(self,:registered_name)
