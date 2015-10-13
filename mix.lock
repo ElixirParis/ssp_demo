@@ -2,9 +2,12 @@
   "cowboy": {:hex, :cowboy, "1.0.3"},
   "cowlib": {:hex, :cowlib, "1.0.1"},
   "exos": {:hex, :exos, "1.0.0"},
+  "exprotobuf": {:hex, :exprotobuf, "0.11.0"},
   "folsom": {:git, "git://github.com/campanja/folsom", "8914823067c623d2839ecd6d17785ba94ad004c8", [ref: "master"]},
   "folsomite": {:git, "https://github.com/campanja/folsomite.git", "e1b85d57515e435f2df06a63c7164f8d0b425c3e", []},
   "goldrush": {:git, "git://github.com/DeadZen/goldrush.git", "64864ba7fcf40988361340e48680b49a2c2938cf", [tag: "0.1.7"]},
+  "gpb": {:hex, :gpb, "3.18.8"},
+  "honeydew": {:hex, :honeydew, "0.0.8"},
   "lager": {:git, "git://github.com/basho/lager.git", "e82bb13efa32a0de747d7dc0e8c567794965cec2", [ref: "HEAD"]},
   "meck": {:git, "git://github.com/eproxus/meck", "dde759050eff19a1a80fd854d7375174b191665d", [tag: "0.8.2"]},
   "plug": {:hex, :plug, "1.0.2"},
@@ -12,4 +15,5 @@
   "proper": {:git, "https://github.com/manopapad/proper.git", "c8c73ee23ba965aa504baa9f1e5e0e74b8f83568", [ref: "HEAD"]},
   "protobuffs": {:git, "https://github.com/campanja/protobuffs.git", "dbe097710a78712fdeedfa9cda96410306cefe03", [ref: "campanja"]},
   "ranch": {:hex, :ranch, "1.1.0"},
+  "riemann": {:hex, :riemann, "0.0.11"},
   "zeta": {:git, "git://github.com/campanja/zeta", "8afb2668f19c7f2727299ffd09d78d4670e096fe", [ref: "campanja"]}}

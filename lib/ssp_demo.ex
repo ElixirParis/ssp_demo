@@ -3,11 +3,10 @@ defmodule SSPDemo.App do
   import Supervisor.Spec
 
   def start(_,_) do
-    IO.puts "start application"
     Supervisor.start_link([
       supervisor(SSPDemo.App.BidderCallerSup,[],[]),
       worker(SSPDemo.Reporter,[],[]),
-      Plug.Adapters.Cowboy.child_spec(:http,SSPDemo.HTTP,[],ip: {0,0,0,0,0,0,0,1}, port: 9888)
+      Plug.Adapters.Cowboy.child_spec(:http,SSPDemo.HTTP,[], port: 9888)
     ], strategy: :one_for_one)
   end
 
@@ -55,17 +54,20 @@ defmodule SSPDemo.Throttler do
     {:ok,%{pid: pid, tr: TimeRing.new(m,n), maxqlen: maxqlen, qlen: 0, q: :queue.new}}
   end
   def handle_call(_req,_reply_to,%{maxqlen: qlen, qlen: qlen}=state) do
-    IO.puts "Bidder #{elem(Process.info(self,:registered_name),1)} overloaded, drop request"
-    # TODO put dropped query into folsom
-    {:noreply,state}
+    {:reply,:dropped,state}
   end
   def handle_call(req,reply_to,%{q: q,tr: timering, qlen: qlen}=state) do
     {wait,timering} = TimeRing.next(timering)
     {:noreply,%{state| qlen: qlen+1, q: :queue.in({req,reply_to},q), tr: timering},wait}
   end
   def handle_info(:timeout,%{pid: pid, q: q, qlen: qlen}=state) do
+    {:registered_name,bidder} = Process.info(self,:registered_name)
     {{:value, {req,reply_to}}, q} = :queue.out(q)
-    spawn(fn-> GenServer.reply(reply_to,GenServer.call(pid,req)) end)
+    spawn(fn-> 
+      res = GenServer.call(pid,req)
+      GenServer.reply(reply_to,res) 
+      Riemann.send_async([%{service: "bid", metric: res.bid,attributes: [bidder: bidder]}])
+    end)
     {:noreply,%{state|q: q, qlen: qlen-1}}
   end
 end
@@ -85,6 +87,8 @@ defmodule SSPDemo.Bidder do
       end
       def map_request(req), do: req
       def use_bidder(req), do: true
+
+      defoverridable [start_link: 1, map_request: 1, use_bidder: 1]
     end
   end
 end
@@ -92,7 +96,7 @@ end
 defmodule SSPDemo.BidRequest do
   defstruct ip: nil, user_agent: nil, language: "en", verticals: [], geo: nil,  
             min_cpm: 0, excluded_agencies: [], excluded_rich_media: [],
-            slot_width: 0, slot_height: 0, parameters: []
+            width: 0, height: 0, params: []
 end
 
 defmodule SSPDemo.BidResponse do
@@ -121,8 +125,8 @@ defmodule SSPDemo.Reporter do
   def start_link, do:
     GenServer.start_link(__MODULE__,[], name: __MODULE__) 
 
-  def handle_cast(_log,state) do
-    ## TODO folsom put metric
+  def handle_cast(res,state) do
+    Riemann.send_async([%{service: "auction_response", metric: res && res.bid || -1}])
     {:noreply,state}
   end
 end
@@ -130,17 +134,28 @@ end
 defmodule SSPDemo do
   def auction(ip,user_agent,language,slot_id) do
     conf = SSPDemo.Config.get
-    request = %SSPDemo.BidRequest{} ## TODO complete with user data + conf
+    min_cpm = conf.min_cpm
+    request = bidrequest(ip,user_agent,language,slot_id,conf)
     response = Application.get_env(:ssp_demo,:bidders)
       |> Enum.filter(& &1.mod.use_bidder(request))
       |> Enum.map(&SSPDemo.CallerSup.request(&1.name,request))
-      |> Enum.map(&Task.yield(&1,100))
-      |> Enum.filter(& !is_nil(&1))
+      |> Enum.map(&Task.yield(&1,1000))
+      |> Enum.reject(fn nil->true # query time is too long
+                        {:ok,:dropped}->true # throttler queue is overloaded
+                        {:ok,%{bid: bid}} when bid<min_cpm->true # bid is too low
+                        _->false 
+                      end)
       |> Enum.map(fn {:ok,resp}->resp end)
       |> Enum.sort_by(& &1.bid)
       |> List.last
     GenServer.cast SSPDemo.Reporter, response
     response
+  end
+  defp bidrequest(ip,user_agent,language,slot_id,conf) do
+    struct(SSPDemo.BidRequest,
+      [ip: ip, user_agent: user_agent, language: language]
+      |> Dict.merge(Dict.delete(conf,:slots))
+      |> Dict.merge(conf.slots[slot_id] || []))
   end
 end
 
@@ -150,8 +165,8 @@ defmodule SSPDemo.HTTP do
   plug :dispatch
 
   get "/ad/:slot" do
-    # todo, get headers to fill user agent and language
-    response = SSPDemo.auction(conn.remote_ip,"","fr",slot)
+    ua = get_req_header(conn,"user-agent") |> List.first |> to_string
+    response = SSPDemo.auction(conn.remote_ip,ua,"fr",slot)
     conn |> put_resp_content_type("application/json")
          |> send_resp(200, Poison.encode!(response))
   end

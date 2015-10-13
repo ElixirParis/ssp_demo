@@ -11,7 +11,7 @@ defmodule SSPDemo.Mixfile do
   end
 
   def application do
-    [applications: [:logger,:plug,:cowboy,:iex,:poison, :exos,:folsom,:folsomite],
+    [applications: [:logger,:plug,:cowboy,:iex,:poison, :exos,:riemann],
      mod: {SSPDemo.App,[]}]
   end
 
@@ -20,6 +20,6 @@ defmodule SSPDemo.Mixfile do
      {:plug, "~> 1.0"},
      {:exos, "~> 1.0.0"},
      {:poison, "~> 1.5.0"},
-     {:folsomite, github: "campanja/folsomite"}]
+     {:riemann, " ~> 0.0.11"}]
   end
 end
