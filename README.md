@@ -10,7 +10,7 @@ highest bidder.
 Here the demo use this context as an example because the contraints
 are very nicely handled by Elixir :
 
-- The bidder querying library can be a propriety library in any language
+- The bidder querying library can be a proprietary library in any language
 - The calls to bidders have to be done in parallel
 - The bidders are external services which can allow only a limited
   rate of bid requests.
